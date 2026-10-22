@@ -1,0 +1,267 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Disaster Response Portal</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f2f4f7;
+            margin: 0;
+            padding: 20px;
+            color: #222;
+        }
+        header {
+            background: #8b0000;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .card, section {
+            background: white;
+            padding: 16px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px #ccc;
+            margin-bottom: 18px;
+        }
+        .card h3 { margin-top: 0; }
+        .alert {
+            color: #b00000;
+            font-weight: bold;
+            background: #ffe0e0;
+            padding: 12px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 10px;
+            text-align: left;
+        }
+        th { background: #e5e5e5; }
+        select { padding: 8px; margin: 10px 0; }
+        button {
+            padding: 8px 12px;
+            cursor: pointer;
+        }
+        .critical { color: #b00000; font-weight: bold; }
+        .high { color: #c45a00; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Disaster Response and Emergency Resource Coordination Portal</h1>
+    <p>Monitor incidents, rescue teams and evacuation centres</p>
+</header>
+
+<div id="alerts"></div>
+
+<div class="cards">
+    <div class="card">
+        <h3>Total Incidents</h3>
+        <p id="total">0</p>
+    </div>
+    <div class="card">
+        <h3>Open Incidents</h3>
+        <p id="open">0</p>
+    </div>
+    <div class="card">
+        <h3>Resolved Incidents</h3>
+        <p id="resolved">0</p>
+    </div>
+    <div class="card">
+        <h3>Available Rescue Teams</h3>
+        <p id="teams">0</p>
+    </div>
+    <div class="card">
+        <h3>Supplies to Replenish</h3>
+        <p id="supplies">0</p>
+    </div>
+</div>
+
+<section>
+    <h2>Incident Management</h2>
+    <label for="severityFilter">Filter by severity:</label>
+    <select id="severityFilter" onchange="displayIncidents()">
+        <option value="All">All Severities</option>
+        <option value="Critical">Critical</option>
+        <option value="High">High</option>
+        <option value="Medium">Medium</option>
+        <option value="Low">Low</option>
+    </select>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Incident ID</th>
+                <th>Location</th>
+                <th>Category</th>
+                <th>Severity</th>
+                <th>Reported Time</th>
+                <th>Assigned Team</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody id="incidentTable"></tbody>
+    </table>
+</section>
+
+<section>
+    <h2>Highest-Priority Incident</h2>
+    <p id="priority"></p>
+</section>
+
+<section>
+    <h2>Evacuation Centres</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Centre</th>
+                <th>Location</th>
+                <th>Occupancy</th>
+                <th>Capacity</th>
+                <th>Occupancy %</th>
+                <th>Relief Supplies</th>
+                <th>Resource Status</th>
+            </tr>
+        </thead>
+        <tbody id="centreTable"></tbody>
+    </table>
+</section>
+
+<section>
+    <h2>Resource Allocation Status</h2>
+    <p id="resourceStatus"></p>
+</section>
+
+<script>
+const incidents = [
+    {id:"INC001",location:"Chennai",category:"Flood",severity:"Critical",time:"09:10 AM",team:"Rescue Team A",status:"Open"},
+    {id:"INC002",location:"Vellore",category:"Building Damage",severity:"High",time:"09:25 AM",team:"Rescue Team B",status:"Open"},
+    {id:"INC003",location:"Tiruvannamalai",category:"Fire",severity:"High",time:"09:40 AM",team:"Fire Team A",status:"Open"},
+    {id:"INC004",location:"Madurai",category:"Flood",severity:"Medium",time:"10:00 AM",team:"Rescue Team C",status:"Resolved"},
+    {id:"INC005",location:"Salem",category:"Medical Emergency",severity:"Critical",time:"10:15 AM",team:"Medical Team A",status:"Open"},
+    {id:"INC006",location:"Trichy",category:"Road Block",severity:"Low",time:"10:30 AM",team:"Rescue Team D",status:"Resolved"}
+];
+
+const centres = [
+    {name:"Central Relief Centre",location:"Chennai",occupancy:940,capacity:1000,supplies:"Food, Water"},
+    {name:"North Relief Centre",location:"Vellore",occupancy:450,capacity:600,supplies:"Food, Blankets"},
+    {name:"South Relief Centre",location:"Madurai",occupancy:180,capacity:500,supplies:"Water, Medicine"}
+];
+
+const rescueTeams = [
+    {name:"Rescue Team A",available:false},
+    {name:"Rescue Team B",available:false},
+    {name:"Rescue Team C",available:true},
+    {name:"Rescue Team D",available:true},
+    {name:"Rescue Team E",available:true}
+];
+
+const supplies = [
+    {name:"Drinking Water",stock:20,minimum:50},
+    {name:"Food Packets",stock:120,minimum:50},
+    {name:"First Aid Kits",stock:10,minimum:25},
+    {name:"Blankets",stock:80,minimum:30}
+];
+
+function displayIncidents() {
+    const filter = document.getElementById("severityFilter").value;
+    const filtered = incidents.filter(i =>
+        filter === "All" || i.severity === filter
+    );
+
+    document.getElementById("incidentTable").innerHTML =
+        filtered.map(i => `
+            <tr>
+                <td>${i.id}</td>
+                <td>${i.location}</td>
+                <td>${i.category}</td>
+                <td class="${i.severity.toLowerCase()}">${i.severity}</td>
+                <td>${i.time}</td>
+                <td>${i.team}</td>
+                <td>${i.status}</td>
+            </tr>
+        `).join("");
+}
+
+function displayCentres() {
+    document.getElementById("centreTable").innerHTML =
+        centres.map(c => {
+            const percentage = Math.round(c.occupancy / c.capacity * 100);
+            const status = percentage > 90
+                ? "CRITICAL - Near Full"
+                : "Capacity Available";
+
+            return `
+                <tr>
+                    <td>${c.name}</td>
+                    <td>${c.location}</td>
+                    <td>${c.occupancy}</td>
+                    <td>${c.capacity}</td>
+                    <td>${percentage}%</td>
+                    <td>${c.supplies}</td>
+                    <td>${status}</td>
+                </tr>
+            `;
+        }).join("");
+
+    const criticalCentres = centres.filter(
+        c => c.occupancy / c.capacity > 0.90
+    );
+
+    document.getElementById("alerts").innerHTML =
+        criticalCentres.map(c => `
+            <p class="alert">
+                CRITICAL ALERT: ${c.name} is at
+                ${Math.round(c.occupancy / c.capacity * 100)}% occupancy!
+            </p>
+        `).join("");
+}
+
+function displayAnalytics() {
+    const openIncidents = incidents.filter(i => i.status === "Open");
+    const resolvedIncidents = incidents.filter(i => i.status === "Resolved");
+    const availableTeams = rescueTeams.filter(t => t.available);
+    const lowSupplies = supplies.filter(s => s.stock < s.minimum);
+
+    document.getElementById("total").textContent = incidents.length;
+    document.getElementById("open").textContent = openIncidents.length;
+    document.getElementById("resolved").textContent = resolvedIncidents.length;
+    document.getElementById("teams").textContent = availableTeams.length;
+    document.getElementById("supplies").textContent = lowSupplies.length;
+
+    const priorityOrder = {Critical:4, High:3, Medium:2, Low:1};
+    const highest = [...openIncidents].sort(
+        (a,b) => priorityOrder[b.severity] - priorityOrder[a.severity]
+    )[0];
+
+    document.getElementById("priority").textContent = highest
+        ? `${highest.id} - ${highest.category} at ${highest.location}, Severity: ${highest.severity}`
+        : "No open incidents.";
+
+    document.getElementById("resourceStatus").textContent =
+        `${availableTeams.length} rescue teams available. ` +
+        `${lowSupplies.length} supply types need replenishment. ` +
+        `${centres.filter(c => c.occupancy / c.capacity > 0.90).length} centre(s) need urgent capacity attention.`;
+}
+
+displayIncidents();
+displayCentres();
+displayAnalytics();
+</script>
+
+</body>
+</html>
