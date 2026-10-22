@@ -1,0 +1,109 @@
+
+pipeline {
+    agent any
+
+    parameters {
+        choice(
+            name: 'PIPELINE_MODE',
+            choices: ['FULL', 'TEST_ONLY'],
+            description: 'Choose the pipeline execution mode'
+        )
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Parallel Validation') {
+            parallel {
+                stage('Check HTML') {
+                    steps {
+                        sh 'test -s index.html'
+                        echo 'HTML file exists.'
+                    }
+                }
+
+                stage('Check Dockerfile') {
+                    steps {
+                        sh 'test -s Dockerfile'
+                        echo 'Dockerfile exists.'
+                    }
+                }
+
+                stage('Check Kubernetes YAML') {
+                    steps {
+                        sh 'test -s deployment.yaml'
+                        echo 'Kubernetes deployment file exists.'
+                    }
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            when {
+                expression { params.PIPELINE_MODE == 'FULL' }
+            }
+            steps {
+                sh 'docker build -t disaster-response-portal:latest .'
+            }
+        }
+
+        stage('Push to Docker Hub') {
+            when {
+                expression { params.PIPELINE_MODE == 'FULL' }
+            }
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )
+                ]) {
+                    sh '''
+                        echo "$DOCKER_PASS" | docker login \
+                          -u "$DOCKER_USER" --password-stdin
+                        docker tag disaster-response-portal:latest \
+                          "$DOCKER_USER/disaster-response-portal:latest"
+                        docker push "$DOCKER_USER/disaster-response-portal:latest"
+                        docker logout
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            when {
+                expression { params.PIPELINE_MODE == 'FULL' }
+            }
+            steps {
+                withCredentials([
+                    file(
+                        credentialsId: 'kubeconfig-file',
+                        variable: 'KUBECONFIG'
+                    )
+                ]) {
+                    sh 'kubectl apply -f deployment.yaml'
+                    sh 'kubectl rollout status deployment/disaster-response-portal'
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            archiveArtifacts artifacts:
+                'index.html,Dockerfile,deployment.yaml,Jenkinsfile',
+                allowEmptyArchive: true
+        }
+        success {
+            echo 'Pipeline completed successfully.'
+        }
+        failure {
+            echo 'Pipeline failed. Check the console output.'
+        }
+    }
+}
